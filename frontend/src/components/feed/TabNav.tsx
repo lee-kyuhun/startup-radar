@@ -31,7 +31,7 @@ export function TabNav({ activeTab, onTabChange }: TabNavProps) {
                   border-b-2 transition-colors duration-200 ease-out
                   ${
                     isActive
-                      ? 'text-white border-accent-blue'
+                      ? 'text-sr-gray-100 border-accent-blue'
                       : 'text-sr-gray-500 border-transparent hover:text-sr-gray-300'
                   }
                 `}

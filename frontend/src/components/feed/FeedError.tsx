@@ -32,7 +32,7 @@ export function FeedError({ onRetry }: FeedErrorProps) {
         <button
           onClick={onRetry}
           className="
-            px-4 py-2 rounded-md text-sm text-white
+            px-4 py-2 rounded-md text-sm text-sr-gray-100
             bg-dark-700 border border-dark-600
             hover:bg-dark-600 transition-colors duration-100
           "

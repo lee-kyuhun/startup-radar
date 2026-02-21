@@ -20,8 +20,8 @@ export function FilterTag({ keyword, active = true, onRemove, onClick }: FilterT
         border transition-colors duration-150 cursor-pointer
         ${
           active
-            ? 'bg-accent-blue/20 border-accent-blue text-white'
-            : 'bg-dark-700 border-dark-600 text-white hover:border-sr-gray-500'
+            ? 'bg-accent-blue/20 border-accent-blue text-sr-gray-100'
+            : 'bg-dark-700 border-dark-600 text-sr-gray-100 hover:border-sr-gray-500'
         }
       `}
       onClick={() => onClick?.(keyword)}
@@ -34,7 +34,7 @@ export function FilterTag({ keyword, active = true, onRemove, onClick }: FilterT
             e.stopPropagation();
             onRemove(keyword);
           }}
-          className="text-sr-gray-500 hover:text-white transition-colors ml-0.5"
+          className="text-sr-gray-500 hover:text-sr-gray-100 transition-colors ml-0.5"
           aria-label={`${keyword} 필터 제거`}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">

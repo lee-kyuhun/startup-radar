@@ -125,6 +125,7 @@
         "backend/"
       ],
       "last_updated": "2026-02-21",
+      "status": "build_complete",
       "build_status": {
         "foundation": "complete",
         "api_feed": "complete",
@@ -133,15 +134,11 @@
         "api_search": "complete",
         "rss_crawler_platum": "complete",
         "rss_crawler_venturesquare": "complete",
-        "html_crawler_startuptoday": "pending",
-        "playwright_crawler_kakaoventures": "pending",
-        "html_crawler_altos": "pending"
+        "html_crawler_startuptoday": "complete",
+        "playwright_crawler_kakaoventures": "complete",
+        "prismic_api_crawler_altos": "complete"
       },
-      "pending_tasks": [
-        "스타트업투데이 HTML 크롤러 구체 구현 (CSS 선택자 분석 필요)",
-        "카카오벤처스 Playwright 크롤러 구체 구현 (Brunch DOM 분석 필요)",
-        "알토스벤처스 HTML 크롤러 구체 구현 (altos.vc 블로그 URL 확인 필요)"
-      ]
+      "pending_tasks": []
     }
   ],
   "gates": {
@@ -151,8 +148,8 @@
     "ui_specs_approved_at": "2026-02-21",
     "tech_spec_approved": true,
     "tech_spec_approved_at": "2026-02-21",
-    "build_complete": false,
-    "build_complete_at": null
+    "build_complete": true,
+    "build_complete_at": "2026-02-21"
   },
   "ephemeral_log": []
 }

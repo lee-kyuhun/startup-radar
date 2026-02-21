@@ -5,7 +5,7 @@ export function Logo() {
   return (
     <Link
       href="/"
-      className="flex items-center gap-2 text-white hover:opacity-90 transition-opacity"
+      className="flex items-center gap-2 text-sr-gray-100 hover:opacity-90 transition-opacity"
     >
       {/* 레이더 아이콘 (SVG, 20x20, accent-blue) */}
       <svg

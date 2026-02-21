@@ -86,7 +86,7 @@ export function FilterBar({ keywords, onKeywordsChange }: FilterBarProps) {
               className="
                 min-w-[80px] h-7 px-2
                 bg-dark-700 border border-accent-blue rounded-sm
-                text-[11px] text-white placeholder:text-sr-gray-500
+                text-[11px] text-sr-gray-100 placeholder:text-sr-gray-500
                 focus:outline-none
               "
             />

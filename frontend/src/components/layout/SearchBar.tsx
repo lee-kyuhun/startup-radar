@@ -69,7 +69,7 @@ export function SearchBar({ className = '', defaultValue = '' }: SearchBarProps)
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-3 text-sr-gray-500 hover:text-white transition-colors"
+          className="absolute right-3 text-sr-gray-500 hover:text-sr-gray-100 transition-colors"
           aria-label="검색어 지우기"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">

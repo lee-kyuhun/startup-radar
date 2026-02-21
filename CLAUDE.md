@@ -139,7 +139,7 @@ PRD 승인 → UI 스펙 승인 → Tech Spec 승인 → 빌드
 - [x] PRD 승인 (2026-02-21) — `.squad/01_planning/PRD.md`
 - [x] UI Spec 승인 (2026-02-21) — `.squad/02_design/UI_Specs.md`
 - [x] Tech Spec 승인 (2026-02-21) — `.squad/03_architecture/Tech_Spec.md`
-- [ ] Build 완료
+- [x] Build 완료 (백엔드: 2026-02-21, 프론트엔드: 2026-02-21)
 
 ### 설계 문서 위치
 - PRD: `.squad/01_planning/PRD.md`
@@ -149,16 +149,17 @@ PRD 승인 → UI 스펙 승인 → Tech Spec 승인 → 빌드
 - DB Schema: `.squad/03_architecture/DB_Schema.md`
 - Tech Decisions: `.squad/03_architecture/Tech_Decisions.md`
 
-### 백엔드 진행 현황 (Backend Lead)
-- [x] Open Questions 기술 검토 완료 (2026-02-21) — `.squad/03_architecture/Open_Questions.md`
-- [x] 백엔드 기반 구축 완료 (2026-02-21) — `backend/` (46개 파일)
-  - FastAPI 앱, SQLAlchemy 모델, Pydantic 스키마, API 4개, RSS 크롤러, Alembic 마이그레이션
-- [ ] 스타트업투데이 HTML 크롤러 구체 구현
-- [ ] 카카오벤처스 Playwright 크롤러 구체 구현
-- [ ] 알토스벤처스 HTML 크롤러 구체 구현
+### 백엔드 진행 현황 (Backend Lead) — 빌드 완료
+- [x] Open Questions 기술 검토 완료 (2026-02-21)
+- [x] 백엔드 기반 구축 완료 — `backend/` (46개 파일)
+- [x] 스타트업투데이 HTMLCrawler 구현 + 검증 (39개 기사)
+- [x] 카카오벤처스 PlaywrightCrawler 구현 (Brunch 타겟, 런타임 검증 보류)
+- [x] 알토스벤처스 Prismic API Crawler 구현 + 검증 (20개 투자소식)
+- [x] 로컬 통합 실행 검증 (총 99개 기사, API 4개 정상)
+- 상세 보고서: `.squad/memory/backend-lead.md`
 
 ### 다음 할 일
-1. Backend Lead → 잔여 크롤러 구현 (스타트업투데이, 카카오벤처스, 알토스벤처스)
-2. Frontend Lead → 프론트엔드 기반 구축 지시 (Next.js 초기화, Tailwind 토큰)
-3. Ephemeral Agent → 피드 UI 구현 (FeedList, FeedItem, TabNav, StatusBadge)
-4. DevOps → Railway + Vercel 배포 설정
+1. DevOps → Railway + Vercel 배포 설정
+2. QA Reviewer → 통합 테스트 작성 + 스펙 검증
+3. Backend → Playwright 브라우저 설치 후 카카오벤처스 크롤러 런타임 검증
+4. Backend → 한국어 풀텍스트 검색 설정 (PostgreSQL korean dictionary)

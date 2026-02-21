@@ -14,8 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body className="bg-dark-900 text-sr-gray-100 font-pretendard antialiased">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('sr-theme')||'dark';document.documentElement.dataset.theme=t;}catch(e){}`,
+          }}
+        />
         <Providers>
           <GlobalHeader />
           <main className="min-h-screen pt-14">

@@ -9,28 +9,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Foundation palette (UI Spec 1-2)
-        'dark-900': '#111118',   // 메인 배경
-        'dark-800': '#1A1A24',   // 카드 배경
-        'dark-700': '#22222F',   // hover 상태 배경
-        'dark-600': '#2E2E3E',   // 보더, 구분선
-        'dark-500': '#3E3E52',   // 비활성 아이콘
-        'sr-gray-100': '#E8E8F0', // 제목 텍스트
-        'sr-gray-300': '#A0A0B8', // 본문/설명 텍스트
-        'sr-gray-500': '#60607A', // 메타 정보 (날짜 등)
-
-        // Accent palette
-        'accent-blue':   '#4B6EF5',
-        'accent-blue-h': '#6B8EFF',
-        'accent-green':  '#22C55E',
-        'accent-amber':  '#F59E0B',
-        'accent-red':    '#EF4444',
-
-        // Source tag colors
-        'tag-news-bg':   '#1E3A2F',
-        'tag-news-text': '#22C55E',
-        'tag-vc-bg':     '#1A2A4A',
-        'tag-vc-text':   '#4B6EF5',
+        // CSS 변수 참조 — rgb(r g b / alpha) 형태로 opacity 지원
+        'dark-900': 'rgb(var(--color-dark-900) / <alpha-value>)',
+        'dark-800': 'rgb(var(--color-dark-800) / <alpha-value>)',
+        'dark-700': 'rgb(var(--color-dark-700) / <alpha-value>)',
+        'dark-600': 'rgb(var(--color-dark-600) / <alpha-value>)',
+        'dark-500': 'rgb(var(--color-dark-500) / <alpha-value>)',
+        'sr-gray-100': 'rgb(var(--color-sr-gray-100) / <alpha-value>)',
+        'sr-gray-300': 'rgb(var(--color-sr-gray-300) / <alpha-value>)',
+        'sr-gray-500': 'rgb(var(--color-sr-gray-500) / <alpha-value>)',
+        'accent-blue':   'rgb(var(--color-accent-blue) / <alpha-value>)',
+        'accent-blue-h': 'rgb(var(--color-accent-blue-h) / <alpha-value>)',
+        'accent-green':  'rgb(var(--color-accent-green) / <alpha-value>)',
+        'accent-amber':  'rgb(var(--color-accent-amber) / <alpha-value>)',
+        'accent-red':    'rgb(var(--color-accent-red) / <alpha-value>)',
+        'tag-news-bg':   'rgb(var(--color-tag-news-bg) / <alpha-value>)',
+        'tag-news-text': 'rgb(var(--color-tag-news-text) / <alpha-value>)',
+        'tag-vc-bg':     'rgb(var(--color-tag-vc-bg) / <alpha-value>)',
+        'tag-vc-text':   'rgb(var(--color-tag-vc-text) / <alpha-value>)',
       },
       fontFamily: {
         pretendard: [
