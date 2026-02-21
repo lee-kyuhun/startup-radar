@@ -1,16 +1,24 @@
 'use client';
 
+import { Suspense, useEffect, useRef, useCallback } from 'react';
 import { redirect } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useSearchQuery } from '@/lib/queries';
 import { FeedItem } from '@/components/feed/FeedItem';
 import { FeedSkeleton } from '@/components/feed/FeedSkeleton';
 import { FeedError } from '@/components/feed/FeedError';
-import { useEffect, useRef, useCallback } from 'react';
 
 // UI Spec 4-2: 검색 결과 페이지
 // 빈 q → / 리다이렉트
 export default function SearchPage() {
+  return (
+    <Suspense>
+      <SearchPageContent />
+    </Suspense>
+  );
+}
+
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
 
@@ -59,7 +67,7 @@ function SearchContent({ query }: { query: string }) {
       {/* SearchHeader */}
       {!isLoading && (
         <div className="mb-4">
-          <span className="text-base font-semibold text-white">"{query}"</span>
+          <span className="text-base font-semibold text-sr-gray-100">"{query}"</span>
           {totalCount !== null && (
             <span className="text-sm text-sr-gray-500 ml-2">
               {totalCount}개 결과

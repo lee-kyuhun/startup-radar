@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { TabNav } from '@/components/feed/TabNav';
 import { FeedList } from '@/components/feed/FeedList';
@@ -11,6 +11,14 @@ import { DEFAULT_TAB } from '@/lib/constants';
 // 메인 피드 페이지 (/)
 // URL 파라미터: ?tab=news&keyword=AI,시리즈A
 export default function MainPage() {
+  return (
+    <Suspense>
+      <MainPageContent />
+    </Suspense>
+  );
+}
+
+function MainPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
