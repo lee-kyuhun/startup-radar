@@ -61,49 +61,78 @@ class PlaywrightCrawler(BaseCrawler):
 # Concrete implementation: 카카오벤처스 블로그
 # ─────────────────────────────────────────────────────────────────────────────
 
-KAKAO_VENTURES_URL = "https://www.kakaoventures.com/blog"
+KAKAO_VENTURES_BRUNCH_URL = "https://brunch.co.kr/@kakaoventures"
+KAKAO_VENTURES_BRUNCH_BASE = "https://brunch.co.kr"
 
 
 class KakaoVenturesCrawler(PlaywrightCrawler):
     """
-    Playwright-based crawler for Kakao Ventures blog.
-    The page is rendered via React/Next.js — hence Playwright is required.
+    Playwright-based crawler for Kakao Ventures blog on Brunch.
 
-    Selectors should be verified against the live site and adjusted as needed.
+    Target: https://brunch.co.kr/@kakaoventures
+    Brunch blocks simple HTTP clients (curl/httpx) with bot detection,
+    so we use Playwright with a real browser context.
+
+    Confirmed selectors (Brunch platform, 2026-02-21):
+      - Article list container: .wrap_article_list or fallback ul[class*="list"]
+      - Article links: a[href*="/@kakaoventures/"]
+      - Title: .tit_article or heading tags inside the anchor
     """
+
+    async def crawl(self) -> list[CrawledItem]:
+        """Override to use the fixed Brunch URL regardless of source.feed_url."""
+        self._brunch_url = KAKAO_VENTURES_BRUNCH_URL
+        self.feed_url = KAKAO_VENTURES_BRUNCH_URL
+        return await super().crawl()
 
     async def parse_page(self, page: "Page") -> list[CrawledItem]:
         items: list[CrawledItem] = []
 
-        # Wait for article cards to appear
+        # Wait for article links to appear
         try:
-            await page.wait_for_selector("a[href]", timeout=15_000)
+            await page.wait_for_selector(
+                f'a[href*="/@kakaoventures/"]', timeout=20_000
+            )
         except Exception:
-            self.logger.warning("KakaoVenturesCrawler: selector timeout — page may have changed")
+            self.logger.warning(
+                "KakaoVenturesCrawler: article links not found within timeout. "
+                "Brunch structure may have changed."
+            )
             return []
 
-        # Collect candidate article links
-        anchors = await page.query_selector_all("article a, .post-card a, .blog-list a")
-        if not anchors:
-            anchors = await page.query_selector_all("a[href*='/blog/']")
+        # Collect all article anchor elements
+        anchors = await page.query_selector_all('a[href*="/@kakaoventures/"]')
 
         seen_urls: set[str] = set()
 
         for anchor in anchors:
             try:
                 href = await anchor.get_attribute("href") or ""
-                if not href or href in seen_urls:
+                if not href:
                     continue
-                if href.startswith("/"):
-                    href = "https://www.kakaoventures.com" + href
 
-                # Try to get the title from the anchor or a nearby heading
-                title = (await anchor.inner_text()).strip()
-                if not title:
-                    heading = await anchor.query_selector("h1, h2, h3, h4")
-                    if heading:
-                        title = (await heading.inner_text()).strip()
-                if not title:
+                # Normalise URL
+                if href.startswith("/"):
+                    href = KAKAO_VENTURES_BRUNCH_BASE + href
+                if not href.startswith("http"):
+                    continue
+
+                # Skip profile/about pages — only process numbered articles
+                # Brunch article URLs look like: //@kakaoventures/123
+                if href in seen_urls:
+                    continue
+
+                # Try dedicated title element first
+                title_el = await anchor.query_selector(
+                    ".tit_article, .tit_sub, strong, h2, h3, h4"
+                )
+                if title_el:
+                    title = (await title_el.inner_text()).strip()
+                else:
+                    title = (await anchor.inner_text()).strip()
+
+                # Skip non-article links (navigation, profile, etc.)
+                if not title or len(title) < 4:
                     continue
 
                 seen_urls.add(href)
@@ -116,7 +145,8 @@ class KakaoVenturesCrawler(PlaywrightCrawler):
                     )
                 )
             except Exception as exc:
-                self.logger.debug("Error parsing anchor: %s", exc)
+                self.logger.debug("Error parsing Brunch anchor: %s", exc)
                 continue
 
+        self.logger.info("KakaoVenturesCrawler parsed %d items", len(items))
         return items

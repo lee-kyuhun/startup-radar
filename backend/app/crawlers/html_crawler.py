@@ -64,59 +64,189 @@ class StartupTodayCrawler(HTMLCrawler):
     """
     Scraper for https://www.startuptoday.kr
 
-    Targets the article list on the main page.
-    The exact CSS selectors should be adjusted after inspecting the live site.
+    Confirmed structure (2026-02-21):
+      - Article cards: div.item (classes: large | medium | small)
+      - Link: <a href="/news/articleView.html?idxno=XXXXX">
+      - Title: <strong class="auto-titles ...">
+      - Date: not present on list page → use crawled_at
     """
+
+    BASE_URL = "https://www.startuptoday.kr"
 
     def parse(self, html: str) -> list[CrawledItem]:
         soup = BeautifulSoup(html, "lxml")
         items: list[CrawledItem] = []
 
-        # Attempt to find article cards — adjust selectors as needed
-        # Common patterns: <article>, .post-item, .news-item, li.item
-        article_tags = (
-            soup.select("article.post")
-            or soup.select(".article-list li")
-            or soup.select(".news_list li")
-            or soup.select("ul.list li")
-        )
-
-        if not article_tags:
+        article_divs = soup.select("div.item")
+        if not article_divs:
             self.logger.warning(
-                "StartupTodayCrawler: could not find article elements. "
-                "The page structure may have changed."
+                "StartupTodayCrawler: div.item not found — page structure may have changed."
             )
             return []
 
-        for tag in article_tags:
-            # Title + URL
-            a_tag = tag.find("a", href=True)
+        seen_urls: set[str] = set()
+
+        for div in article_divs:
+            a_tag = div.find("a", href=True)
             if not a_tag:
                 continue
-            title = a_tag.get_text(strip=True)
-            url = str(a_tag["href"])
-            if url.startswith("/"):
-                url = "https://www.startuptoday.kr" + url
 
-            if not title or not url:
+            href = str(a_tag["href"])
+            # Only process article pages
+            if "articleView" not in href:
                 continue
 
-            # Summary (optional)
-            summary_tag = tag.find(class_=lambda c: c and "summary" in c.lower()) if tag else None
-            raw_summary = summary_tag.get_text(strip=True) if summary_tag else ""
-            summary = build_summary(raw_summary) if raw_summary else None
+            url = href if href.startswith("http") else self.BASE_URL + href
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
 
-            # Date (optional — fall back to now)
-            date_tag = tag.find("time") or tag.find(class_=lambda c: c and "date" in c.lower())
-            published_at: datetime
-            if date_tag:
-                try:
-                    dt_str = date_tag.get("datetime") or date_tag.get_text(strip=True)
-                    published_at = datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
-                except Exception:
-                    published_at = datetime.now(tz=timezone.utc)
+            # Title: prefer strong.auto-titles, fall back to link text
+            title_tag = a_tag.find("strong", class_=lambda c: c and "auto-titles" in c)
+            title = title_tag.get_text(strip=True) if title_tag else a_tag.get_text(strip=True)
+            title = title.strip()
+            if not title:
+                continue
+
+            items.append(
+                CrawledItem(
+                    title=title,
+                    url=url,
+                    published_at=datetime.now(tz=timezone.utc),
+                    summary=None,
+                )
+            )
+
+        self.logger.info("StartupTodayCrawler parsed %d items", len(items))
+        return items
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Concrete implementation: 알토스벤처스 (Prismic API)
+# ─────────────────────────────────────────────────────────────────────────────
+
+import httpx  # noqa: E402 — imported here to keep top-level imports clean
+
+
+class AltosVenturesCrawler(HTMLCrawler):
+    """
+    Crawls Altos Ventures portfolio updates via the Prismic CMS API.
+
+    altos.vc is a Nuxt.js SPA backed by Prismic (https://altos.cdn.prismic.io).
+    There is no editorial blog; instead we surface recently-added portfolio
+    companies as "investment news" items.
+
+    Prismic API reference:
+      GET https://altos.cdn.prismic.io/api/v2
+      GET https://altos.cdn.prismic.io/api/v2/documents/search?ref=<ref>&type=post&orderings=[document.first_publication_date+desc]&pageSize=20
+    """
+
+    PRISMIC_API_URL = "https://altos.cdn.prismic.io/api/v2"
+    PORTFOLIO_URL_BASE = "https://altos.vc/portfolio"
+
+    async def crawl(self) -> list[CrawledItem]:
+        """Override crawl() to use Prismic API directly instead of HTML fetch."""
+        self.logger.info("Crawling Altos Ventures via Prismic API")
+
+        headers = {"User-Agent": self.user_agent}
+
+        async with httpx.AsyncClient(headers=headers, timeout=30) as client:
+            # Step 1: fetch the master ref
+            try:
+                meta_resp = await client.get(self.PRISMIC_API_URL)
+                meta_resp.raise_for_status()
+                meta = meta_resp.json()
+            except Exception as exc:
+                self.logger.error("Failed to fetch Prismic API meta: %s", exc)
+                return []
+
+            master_ref = next(
+                (r["ref"] for r in meta.get("refs", []) if r.get("isMasterRef")),
+                None,
+            )
+            if not master_ref:
+                self.logger.error("Prismic master ref not found")
+                return []
+
+            await self._rate_limit_sleep()
+
+            # Step 2: query latest portfolio additions (type=post)
+            try:
+                search_resp = await client.get(
+                    f"{self.PRISMIC_API_URL}/documents/search",
+                    params={
+                        "ref": master_ref,
+                        "type": "post",
+                        "pageSize": 20,
+                        "orderings": "[document.first_publication_date desc]",
+                    },
+                )
+                search_resp.raise_for_status()
+                data = search_resp.json()
+            except Exception as exc:
+                self.logger.error("Prismic search failed: %s", exc)
+                return []
+
+        return self._parse_prismic_results(data.get("results", []))
+
+    def _parse_prismic_results(self, results: list[dict]) -> list[CrawledItem]:
+        items: list[CrawledItem] = []
+
+        for doc in results:
+            uid = doc.get("uid", "")
+            if not uid:
+                continue
+
+            doc_data = doc.get("data", {})
+
+            # Extract company name from `name` rich-text field
+            name_field = doc_data.get("name", [])
+            if isinstance(name_field, list) and name_field:
+                title_text = name_field[0].get("text", "").strip()
             else:
+                title_text = uid
+
+            if not title_text:
+                continue
+
+            title = f"알토스벤처스 포트폴리오: {title_text}"
+
+            # Company website URL (prefer) or altos.vc portfolio page
+            link_field = doc_data.get("link", [])
+            company_url: str = ""
+            if isinstance(link_field, list) and link_field:
+                spans = link_field[0].get("spans", [])
+                for span in spans:
+                    if span.get("type") == "hyperlink":
+                        company_url = span.get("data", {}).get("url", "")
+                        break
+            url = company_url or f"{self.PORTFOLIO_URL_BASE}/{uid}"
+
+            # Summary from `content` or `one_liner`
+            one_liner = doc_data.get("one_liner", [])
+            content_field = doc_data.get("content", [])
+            raw_text = ""
+            for field in (one_liner, content_field):
+                if isinstance(field, list) and field:
+                    raw_text = field[0].get("text", "")
+                    if raw_text:
+                        break
+
+            summary = build_summary(raw_text) if raw_text else None
+
+            # Date: first_publication_date
+            pub_date_str = doc.get("first_publication_date", "")
+            try:
+                from datetime import datetime, timezone
+                published_at = datetime.fromisoformat(
+                    pub_date_str.replace("Z", "+00:00")
+                )
+            except Exception:
                 published_at = datetime.now(tz=timezone.utc)
+
+            # location as metadata
+            location = doc_data.get("location")
+            raw_metadata = {"uid": uid, "location": location}
 
             items.append(
                 CrawledItem(
@@ -124,7 +254,13 @@ class StartupTodayCrawler(HTMLCrawler):
                     url=url,
                     published_at=published_at,
                     summary=summary,
+                    raw_metadata=raw_metadata,
                 )
             )
 
+        self.logger.info("AltosVenturesCrawler parsed %d items", len(items))
         return items
+
+    def parse(self, html: str) -> list[CrawledItem]:
+        # Not used — crawl() is overridden directly
+        return []
