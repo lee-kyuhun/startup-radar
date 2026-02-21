@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/startup_radar"
 
+    @property
+    def async_database_url(self) -> str:
+        """Convert postgresql:// to postgresql+asyncpg:// for SQLAlchemy async."""
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
     # ── Redis ─────────────────────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379"
 
