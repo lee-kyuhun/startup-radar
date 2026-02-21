@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import subprocess
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -29,12 +31,30 @@ if settings.SENTRY_DSN:
 scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
 
 
-# ── Seed (production only) ────────────────────────────────────────────────────
+# ── Production init (migration + seed) ────────────────────────────────────────
 async def _run_production_init() -> None:
-    """Seed initial data only when APP_ENV == 'production'."""
+    """Run alembic migrations + seed data only when APP_ENV == 'production'."""
     if settings.APP_ENV != "production":
         return
 
+    # 1) Alembic migration via subprocess (separate process = no event loop conflict)
+    try:
+        logger.info("[startup] Running alembic upgrade head …")
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            logger.info("[startup] alembic upgrade head — OK")
+        else:
+            logger.error("[startup] alembic FAILED (rc=%d): %s", result.returncode, result.stderr)
+    except Exception as exc:
+        logger.error("[startup] alembic FAILED: %s", exc, exc_info=True)
+
+    # 2) Seed initial data
     try:
         from app.scripts.seed import seed_sources
         logger.info("[startup] Running seed_sources …")
