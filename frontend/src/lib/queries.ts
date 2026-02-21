@@ -60,12 +60,12 @@ export function useSearchQuery(query: string) {
     queryFn: ({ pageParam }) =>
       fetchSearch({
         q: query,
-        cursor: pageParam as string | undefined,
+        offset: pageParam as number,
         limit: SEARCH_DEFAULT_LIMIT,
       }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: FeedResponse) =>
-      lastPage.meta.next_cursor ?? undefined,
+    initialPageParam: 0 as number,
+    getNextPageParam: (lastPage: FeedResponse, allPages) =>
+      lastPage.meta.has_more ? allPages.length * SEARCH_DEFAULT_LIMIT : undefined,
     enabled: query.length > 0,
     staleTime: FEED_STALE_TIME,
   });

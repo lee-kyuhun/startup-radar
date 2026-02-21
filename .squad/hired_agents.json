@@ -121,25 +121,27 @@
       "memory_loaded": true,
       "memory_path": "~/.claude/agents-memory/backend-lead/learnings.md",
       "deliverables": [
-        "backend/app/main.py",
-        "backend/app/api/deps.py",
-        "backend/app/api/v1/router.py",
-        "backend/app/api/v1/feed.py",
-        "backend/app/api/v1/sources.py",
-        "backend/app/api/v1/status.py",
-        "backend/app/api/v1/search.py",
-        "backend/app/services/feed_service.py",
-        "backend/app/services/search_service.py",
-        "backend/app/services/status_service.py",
-        "backend/app/crawlers/manager.py",
-        "backend/alembic/env.py",
-        "backend/alembic/versions/0001_create_initial_tables.py",
-        "backend/tests/test_feed_api.py",
-        "backend/tests/test_search_api.py",
-        "backend/tests/test_crawlers.py"
+        ".squad/03_architecture/Open_Questions.md",
+        "backend/"
       ],
-      "status": "build_complete",
-      "last_updated": "2026-02-21"
+      "last_updated": "2026-02-21",
+      "build_status": {
+        "foundation": "complete",
+        "api_feed": "complete",
+        "api_sources": "complete",
+        "api_status": "complete",
+        "api_search": "complete",
+        "rss_crawler_platum": "complete",
+        "rss_crawler_venturesquare": "complete",
+        "html_crawler_startuptoday": "pending",
+        "playwright_crawler_kakaoventures": "pending",
+        "html_crawler_altos": "pending"
+      },
+      "pending_tasks": [
+        "스타트업투데이 HTML 크롤러 구체 구현 (CSS 선택자 분석 필요)",
+        "카카오벤처스 Playwright 크롤러 구체 구현 (Brunch DOM 분석 필요)",
+        "알토스벤처스 HTML 크롤러 구체 구현 (altos.vc 블로그 URL 확인 필요)"
+      ]
     }
   ],
   "gates": {

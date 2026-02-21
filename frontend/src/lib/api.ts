@@ -57,6 +57,13 @@ export interface FeedResponse {
   meta: PaginationMeta;
 }
 
+interface FeedPageData {
+  items: FeedItem[];
+  next_cursor: string | null;
+  has_more: boolean;
+  limit: number;
+}
+
 export async function fetchFeed(params: {
   tab?: string;
   cursor?: string;
@@ -73,32 +80,40 @@ export async function fetchFeed(params: {
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  const envelope: Envelope<FeedItem[]> = await res.json();
+  const envelope: Envelope<FeedPageData> = await res.json();
   if (envelope.error) throw new ApiClientError(envelope.error.code, envelope.error.message);
   return {
-    items: envelope.data ?? [],
-    meta: envelope.meta ?? { next_cursor: null, has_more: false, total_count: null },
+    items: envelope.data?.items ?? [],
+    meta: {
+      next_cursor: envelope.data?.next_cursor ?? null,
+      has_more: envelope.data?.has_more ?? false,
+      total_count: null,
+    },
   };
 }
 
 export async function fetchSearch(params: {
   q: string;
-  cursor?: string;
+  offset?: number;
   limit?: number;
 }): Promise<FeedResponse> {
   const qs = buildSearchParams({
     q: params.q,
-    cursor: params.cursor,
+    offset: params.offset ?? 0,
     limit: params.limit ?? 20,
   });
   const res = await fetch(`${BASE_URL}/api/v1/search/${qs}`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  const envelope: Envelope<FeedItem[]> = await res.json();
+  const envelope: Envelope<FeedPageData> = await res.json();
   if (envelope.error) throw new ApiClientError(envelope.error.code, envelope.error.message);
   return {
-    items: envelope.data ?? [],
-    meta: envelope.meta ?? { next_cursor: null, has_more: false, total_count: 0 },
+    items: envelope.data?.items ?? [],
+    meta: {
+      next_cursor: null,
+      has_more: envelope.data?.has_more ?? false,
+      total_count: null,
+    },
   };
 }
 
