@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -54,7 +55,7 @@ async def _run_production_init() -> None:
     # --- Alembic migration ---
     try:
         logger.info("[startup] Running alembic upgrade head …")
-        _run_alembic_upgrade()
+        await asyncio.to_thread(_run_alembic_upgrade)
         logger.info("[startup] alembic upgrade head — OK")
     except Exception as exc:
         logger.error("[startup] alembic upgrade head FAILED: %s", exc, exc_info=True)
