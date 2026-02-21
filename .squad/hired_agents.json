@@ -1,0 +1,156 @@
+{
+  "project": "PJ004_startup-radar",
+  "hired_at": "2026-02-21",
+  "status": "active",
+  "current_phase": "phase_4_build",
+  "agents": [
+    {
+      "role": "orchestrator",
+      "source": "~/.claude/agents/orchestrator.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/orchestrator/learnings.md"
+    },
+    {
+      "role": "pm",
+      "source": "~/.claude/agents/pm.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/pm/learnings.md",
+      "deliverables": [
+        ".squad/01_planning/PRD.md",
+        ".squad/01_planning/Open_Questions.md"
+      ],
+      "last_updated": "2026-02-21"
+    },
+    {
+      "role": "designer",
+      "source": "~/.claude/agents/designer.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/designer/learnings.md",
+      "deliverables": [
+        ".squad/02_design/UI_Specs.md"
+      ],
+      "last_updated": "2026-02-21",
+      "design_decisions": {
+        "confirmed": [
+          {
+            "id": "D-1",
+            "subject": "피드 레이아웃",
+            "decision": "단일 컬럼 — 데스크톱 포함 전 해상도 단일 컬럼",
+            "confirmed_at": "2026-02-21"
+          },
+          {
+            "id": "D-2",
+            "subject": "인물 탭 MVP 처리",
+            "decision": "탭 자체 숨김 — TabNav에서 인물 탭 제거, 뉴스/VC 블로그 2탭으로만 구성",
+            "confirmed_at": "2026-02-21"
+          },
+          {
+            "id": "D-6",
+            "subject": "FeedItem 이미지 표시",
+            "decision": "썸네일 없음 — 텍스트 전용 레이아웃",
+            "confirmed_at": "2026-02-21"
+          },
+          {
+            "id": "D-3",
+            "subject": "요약 텍스트 생성 방식",
+            "decision": "백엔드 생성 — text_utils.py에서 HTML 제거 → 공백 정규화 → 200자 마침표 기준 자름. summary 필드로 API 제공.",
+            "confirmed_at": "2026-02-21"
+          },
+          {
+            "id": "D-4",
+            "subject": "날짜 표시 형식",
+            "decision": "상대 시간 — 방금 전 / N분 전 / N시간 전 / MM월 DD일. formatDate.ts 구현 확인.",
+            "confirmed_at": "2026-02-21"
+          },
+          {
+            "id": "D-5",
+            "subject": "키워드 필터 초기 제공 방식",
+            "decision": "프리셋 5개 제공 — AI, 시리즈A, 핀테크, 헬스케어, 투자. MAX_FILTER_KEYWORDS = 5.",
+            "confirmed_at": "2026-02-21"
+          }
+        ],
+        "pending": []
+      }
+    },
+    {
+      "role": "tech-lead",
+      "source": "~/.claude/agents/tech-lead.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/tech-lead/learnings.md",
+      "deliverables": [
+        ".squad/03_architecture/Tech_Spec.md",
+        ".squad/03_architecture/API_Contract.md",
+        ".squad/03_architecture/DB_Schema.md",
+        ".squad/03_architecture/Tech_Decisions.md"
+      ],
+      "last_updated": "2026-02-21"
+    },
+    {
+      "role": "frontend-lead",
+      "source": "~/.claude/agents/frontend-lead.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/frontend-lead/learnings.md",
+      "deliverables": [
+        "frontend/tailwind.config.ts",
+        "frontend/src/app/globals.css",
+        "frontend/src/app/layout.tsx",
+        "frontend/src/app/page.tsx",
+        "frontend/src/app/search/page.tsx",
+        "frontend/src/app/providers.tsx",
+        "frontend/src/components/layout/GlobalHeader.tsx",
+        "frontend/src/components/layout/Logo.tsx",
+        "frontend/src/components/layout/SearchBar.tsx",
+        "frontend/src/components/layout/FeedStatusBadge.tsx",
+        "frontend/src/components/feed/TabNav.tsx",
+        "frontend/src/components/feed/FeedList.tsx",
+        "frontend/src/components/feed/FeedItem.tsx",
+        "frontend/src/components/feed/SourceTag.tsx",
+        "frontend/src/components/feed/FeedSkeleton.tsx",
+        "frontend/src/components/feed/FeedEmpty.tsx",
+        "frontend/src/components/feed/FeedError.tsx",
+        "frontend/src/components/filter/FilterBar.tsx",
+        "frontend/src/components/filter/FilterTag.tsx",
+        "frontend/src/lib/queries.ts"
+      ],
+      "status": "build_complete",
+      "last_updated": "2026-02-21"
+    },
+    {
+      "role": "backend-lead",
+      "source": "~/.claude/agents/backend-lead.md",
+      "memory_loaded": true,
+      "memory_path": "~/.claude/agents-memory/backend-lead/learnings.md",
+      "deliverables": [
+        "backend/app/main.py",
+        "backend/app/api/deps.py",
+        "backend/app/api/v1/router.py",
+        "backend/app/api/v1/feed.py",
+        "backend/app/api/v1/sources.py",
+        "backend/app/api/v1/status.py",
+        "backend/app/api/v1/search.py",
+        "backend/app/services/feed_service.py",
+        "backend/app/services/search_service.py",
+        "backend/app/services/status_service.py",
+        "backend/app/crawlers/manager.py",
+        "backend/alembic/env.py",
+        "backend/alembic/versions/0001_create_initial_tables.py",
+        "backend/tests/test_feed_api.py",
+        "backend/tests/test_search_api.py",
+        "backend/tests/test_crawlers.py"
+      ],
+      "status": "build_complete",
+      "last_updated": "2026-02-21"
+    }
+  ],
+  "gates": {
+    "prd_approved": true,
+    "prd_approved_at": "2026-02-21",
+    "ui_specs_approved": true,
+    "ui_specs_approved_at": "2026-02-21",
+    "tech_spec_approved": true,
+    "tech_spec_approved_at": "2026-02-21",
+    "build_complete": false,
+    "build_complete_at": null
+  },
+  "ephemeral_log": []
+}
