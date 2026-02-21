@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -29,10 +30,52 @@ if settings.SENTRY_DSN:
 scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
 
 
+# ── DB migration + seed (production only) ────────────────────────────────────
+def _run_alembic_upgrade() -> None:
+    """Run 'alembic upgrade head' programmatically. Idempotent."""
+    from alembic import command
+    from alembic.config import Config
+
+    # alembic.ini lives one directory above this package (backend/)
+    alembic_cfg_path = os.path.join(
+        os.path.dirname(__file__),  # backend/app/
+        "..",                        # backend/
+        "alembic.ini",
+    )
+    alembic_cfg = Config(os.path.normpath(alembic_cfg_path))
+    command.upgrade(alembic_cfg, "head")
+
+
+async def _run_production_init() -> None:
+    """Run DB migration and seed only when APP_ENV == 'production'."""
+    if settings.APP_ENV != "production":
+        return
+
+    # --- Alembic migration ---
+    try:
+        logger.info("[startup] Running alembic upgrade head …")
+        _run_alembic_upgrade()
+        logger.info("[startup] alembic upgrade head — OK")
+    except Exception as exc:
+        logger.error("[startup] alembic upgrade head FAILED: %s", exc, exc_info=True)
+
+    # --- Seed sources ---
+    try:
+        from app.scripts.seed import seed_sources
+        logger.info("[startup] Running seed_sources …")
+        await seed_sources()
+        logger.info("[startup] seed_sources — OK")
+    except Exception as exc:
+        logger.error("[startup] seed_sources FAILED: %s", exc, exc_info=True)
+
+
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting up Startup Radar API (env=%s)", settings.APP_ENV)
+
+    # Production-only: auto-migrate DB and seed initial data
+    await _run_production_init()
 
     # Register crawler jobs
     try:
