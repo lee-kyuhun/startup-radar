@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crawlers.base import BaseCrawler, CrawledItem
-from app.crawlers.html_crawler import StartupTodayCrawler
+from app.crawlers.html_crawler import AltosVenturesCrawler, StartupTodayCrawler
 from app.crawlers.playwright_crawler import KakaoVenturesCrawler
 from app.crawlers.rss_crawler import RSSCrawler
 from app.database import AsyncSessionFactory
@@ -30,6 +30,7 @@ _STRATEGY_MAP: dict[str, type[BaseCrawler]] = {
 _SLUG_OVERRIDE_MAP: dict[str, type[BaseCrawler]] = {
     "startuptoday": StartupTodayCrawler,
     "kakao-ventures": KakaoVenturesCrawler,
+    "altos-ventures": AltosVenturesCrawler,
 }
 
 
