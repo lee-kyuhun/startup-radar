@@ -23,8 +23,8 @@ router = APIRouter()
 )
 async def list_feed(
     tab: Annotated[
-        Literal["news", "vc_blog", "all"],
-        Query(description="Feed tab — 'news', 'vc_blog', or 'all'"),
+        Literal["news", "vc_blog"],
+        Query(description="Feed tab — 'news' or 'vc_blog'"),
     ] = "news",
     cursor: Annotated[
         str | None,
@@ -52,6 +52,8 @@ async def list_feed(
         meta={
             "tab": tab,
             "limit": limit,
+            "next_cursor": page.next_cursor,
             "has_more": page.has_more,
+            "total_count": None,
         },
     )

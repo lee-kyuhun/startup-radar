@@ -24,9 +24,11 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """Convert postgresql:// to postgresql+asyncpg:// for SQLAlchemy async."""
+        """Convert postgresql:// or postgres:// to postgresql+asyncpg:// for SQLAlchemy async."""
         url = self.DATABASE_URL
-        if url.startswith("postgresql://"):
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
 

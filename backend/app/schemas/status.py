@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -22,12 +23,11 @@ class CrawlLogSchema(BaseModel):
 class SourceStatusSchema(BaseModel):
     source_id: int
     source_name: str
-    source_slug: str
     last_crawled_at: datetime | None
-    latest_log: CrawlLogSchema | None
+    crawl_status: Literal["success", "failed", "running", "unknown"]
 
 
 class StatusResponse(BaseModel):
+    last_updated_at: datetime | None
+    status: Literal["ok", "warning", "error"]
     sources: list[SourceStatusSchema]
-    total_sources: int
-    active_sources: int

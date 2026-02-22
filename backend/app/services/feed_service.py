@@ -51,7 +51,6 @@ def _item_to_schema(item: FeedItem) -> FeedItemSchema:
         summary=item.summary,
         author=item.author,
         published_at=item.published_at,
-        crawled_at=item.crawled_at,
     )
 
 
@@ -76,7 +75,6 @@ async def get_feed_page(
     type_map = {
         "news": ["news"],
         "vc_blog": ["vc_blog"],
-        "all": ["news", "vc_blog", "person_threads"],
     }
     source_types = type_map.get(tab, ["news"])
 

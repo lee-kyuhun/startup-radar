@@ -152,6 +152,44 @@
 
 ---
 
+## [PM 전달] Railway 배포 시 DB 초기화 이슈 (2026-02-21)
+
+### 알아야 할 사항
+
+`database.py`의 `engine`이 모듈 로드 시점에 `settings.async_database_url`로 생성됨.
+Railway에서 `postgres.railway.internal` DNS가 resolve 안 되면 이 엔진을 사용하는 **모든 DB 작업이 실패**함.
+
+### 영향 받는 코드 경로
+
+1. `seed.py:seed_sources()` → `init_db()` → `engine.begin()` → DNS 에러
+2. `manager.py:register_all_crawl_jobs()` → `AsyncSessionFactory()` → DNS 에러
+3. `alembic/env.py` → `async_engine_from_config()` → DNS 에러
+
+### 현재 main.py 구조
+
+```
+lifespan 시작
+  → _run_production_init()
+    → subprocess: alembic upgrade head  ← DNS 에러 (rc=1)
+    → seed_sources()                     ← DNS 에러
+  → register_all_crawl_jobs(scheduler)   ← DNS 에러
+  → scheduler.start() (0 jobs)
+  → yield (앱 정상 실행, /health OK)
+```
+
+### DevOps가 해결하면 코드 변경 불필요
+
+DNS 문제가 해결되면 (외부 URL 사용 등) 현재 코드가 그대로 정상 작동함.
+`main.py`의 subprocess 기반 alembic 호출도 정상 동작할 것.
+
+### 검토 요청 사항
+
+DNS 해결 후에도 `seed.py`의 `init_db()` 호출이 적절한지 확인 필요:
+- production에서 `Base.metadata.create_all`이 alembic과 충돌하지 않는지
+- alembic이 먼저 실행되므로 `init_db()`는 사실상 no-op이 되어야 하지만, 순서 보장 확인
+
+---
+
 ## 9. 다른 에이전트에게
 
 - **Frontend Lead**: API Contract는 `.squad/03_architecture/API_Contract.md` 참고. Base URL은 `.env.local`의 `NEXT_PUBLIC_API_BASE_URL` 사용. 백엔드 로컬 실행: `cd backend && uvicorn app.main:app --reload`

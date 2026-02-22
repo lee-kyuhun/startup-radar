@@ -24,7 +24,7 @@ router = APIRouter()
 async def search(
     q: Annotated[
         str,
-        Query(min_length=1, max_length=200, description="Search keyword"),
+        Query(min_length=1, max_length=100, description="Search keyword"),
     ],
     source_type: Annotated[
         str | None,

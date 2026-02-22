@@ -24,7 +24,6 @@ class FeedItemSchema(BaseModel):
     summary: str | None
     author: str | None
     published_at: datetime
-    crawled_at: datetime
 
 
 class FeedPageResponse(BaseModel):
