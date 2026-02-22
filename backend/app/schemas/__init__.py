@@ -1,6 +1,6 @@
 from app.schemas.common import ErrorDetail, PaginationMeta, ResponseEnvelope
 from app.schemas.feed import FeedItemSchema, FeedPageResponse, FeedSourceSummary
-from app.schemas.source import SourceListResponse, SourceSchema
+from app.schemas.source import SourceSchema
 from app.schemas.status import CrawlLogSchema, SourceStatusSchema, StatusResponse
 
 __all__ = [
@@ -11,7 +11,6 @@ __all__ = [
     "FeedPageResponse",
     "FeedSourceSummary",
     "SourceSchema",
-    "SourceListResponse",
     "CrawlLogSchema",
     "SourceStatusSchema",
     "StatusResponse",
