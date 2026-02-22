@@ -63,8 +63,20 @@ async def _run_production_init() -> None:
         return
 
     # 1) Alembic migration via subprocess (separate process = no event loop conflict)
+    #    Safety: alembic upgrade head는 이미 적용된 마이그레이션을 건너뛰므로
+    #    기존 데이터에 영향 없음. downgrade는 RuntimeError로 차단됨.
     try:
         logger.info("[startup] Running alembic upgrade head …")
+        # 먼저 현재 마이그레이션 상태 확인
+        current = await asyncio.to_thread(
+            subprocess.run,
+            ["alembic", "current"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        logger.info("[startup] alembic current: %s", current.stdout.strip())
+
         result = await asyncio.to_thread(
             subprocess.run,
             ["alembic", "upgrade", "head"],

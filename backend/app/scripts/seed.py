@@ -12,7 +12,7 @@ import logging
 
 from sqlalchemy import select
 
-from app.database import AsyncSessionFactory, init_db
+from app.database import AsyncSessionFactory
 from app.models.source import Source
 
 logging.basicConfig(level=logging.INFO)
@@ -97,7 +97,8 @@ SOURCES: list[dict] = [
 
 
 async def seed_sources() -> None:
-    await init_db()
+    # NOTE: init_db() (create_all) 제거 — 프로덕션에서는 Alembic이 스키마를 관리함.
+    # init_db()를 호출하면 Alembic과 충돌하여 데이터 손실 위험이 있음.
 
     async with AsyncSessionFactory() as session:
         inserted = 0

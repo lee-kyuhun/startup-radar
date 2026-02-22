@@ -213,6 +213,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("crawl_logs")
-    op.drop_table("feed_items")
-    op.drop_table("sources")
+    # 프로덕션 안전장치: downgrade 실행 시 데이터 손실 방지
+    raise RuntimeError(
+        "BLOCKED: downgrade 0001 would DROP all tables and destroy all data. "
+        "If you really need this, comment out this raise and run again."
+    )
