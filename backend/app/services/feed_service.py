@@ -1,39 +1,19 @@
 from __future__ import annotations
 
-import base64
 import logging
-from datetime import datetime, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.feed_item import FeedItem
 from app.models.source import Source
 from app.redis_client import cache_get, cache_set
-from app.schemas.feed import FeedItemSchema, FeedPageResponse, FeedSourceSummary
+from app.schemas.feed import FeedItemSchema, FeedSourceSummary
 
 logger = logging.getLogger(__name__)
 
-FEED_CACHE_TTL = 60  # seconds
-
-
-def _encode_cursor(published_at: datetime, item_id: int) -> str:
-    raw = f"{published_at.isoformat()}:{item_id}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
-
-
-def _decode_cursor(cursor: str) -> tuple[datetime, int] | None:
-    try:
-        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
-        dt_str, id_str = raw.rsplit(":", 1)
-        published_at = datetime.fromisoformat(dt_str)
-        if published_at.tzinfo is None:
-            published_at = published_at.replace(tzinfo=timezone.utc)
-        return published_at, int(id_str)
-    except Exception as exc:
-        logger.warning("Invalid cursor %r: %s", cursor, exc)
-        return None
+FEED_CACHE_TTL = 300  # 5 minutes (as per API Contract / DB_Schema.md)
 
 
 def _item_to_schema(item: FeedItem) -> FeedItemSchema:
@@ -57,19 +37,24 @@ def _item_to_schema(item: FeedItem) -> FeedItemSchema:
 async def get_feed_page(
     session: AsyncSession,
     tab: str,
-    cursor: str | None,
+    page: int,
     limit: int,
     keyword: str | None = None,
-) -> FeedPageResponse:
+) -> tuple[list[dict], int]:
     """
-    Fetch a page of feed items with cursor-based pagination.
+    Fetch a page of feed items with offset-based pagination.
+    Returns (items_as_dicts, total_count).
     Results are cached in Redis for FEED_CACHE_TTL seconds.
     """
-    cache_key = f"feed:{tab}:cursor={cursor or 'start'}:limit={limit}:kw={keyword or ''}"
+    # Redis cache key: feed:{tab}:p{page}:l{limit} (v1.1 format)
+    cache_key = f"feed:{tab}:p{page}:l{limit}"
+    if keyword:
+        cache_key += f":kw={keyword}"
+
     cached = await cache_get(cache_key)
     if cached:
         logger.debug("Cache hit: %s", cache_key)
-        return FeedPageResponse(**cached)
+        return cached["items"], cached["total_count"]
 
     # Determine source_type filter from tab name
     type_map = {
@@ -78,61 +63,62 @@ async def get_feed_page(
     }
     source_types = type_map.get(tab, ["news"])
 
-    # Base query
-    stmt = (
-        select(FeedItem)
-        .join(FeedItem.source)
-        .options(joinedload(FeedItem.source))
-        .where(
-            and_(
-                FeedItem.is_active == True,
-                Source.source_type.in_(source_types),
-                Source.is_active == True,
-            )
-        )
+    # Build base filter conditions
+    base_conditions = and_(
+        FeedItem.is_active == True,  # noqa: E712
+        Source.source_type.in_(source_types),
+        Source.is_active == True,  # noqa: E712
     )
 
-    # Cursor pagination — keyset on (published_at DESC, id DESC)
-    if cursor:
-        decoded = _decode_cursor(cursor)
-        if decoded:
-            cursor_dt, cursor_id = decoded
-            stmt = stmt.where(
-                (FeedItem.published_at < cursor_dt)
-                | (
-                    (FeedItem.published_at == cursor_dt)
-                    & (FeedItem.id < cursor_id)
-                )
-            )
-
     # Keyword filter
+    keyword_condition = None
     if keyword:
-        stmt = stmt.where(
+        keyword_condition = (
             FeedItem.title.ilike(f"%{keyword}%")
             | FeedItem.summary.ilike(f"%{keyword}%")
         )
 
-    stmt = stmt.order_by(FeedItem.published_at.desc(), FeedItem.id.desc()).limit(limit + 1)
+    # Count total items matching the filter
+    count_stmt = (
+        select(func.count())
+        .select_from(FeedItem)
+        .join(FeedItem.source)
+        .where(base_conditions)
+    )
+    if keyword_condition is not None:
+        count_stmt = count_stmt.where(keyword_condition)
 
-    result = await session.execute(stmt)
-    rows = result.scalars().all()
+    total_count_result = await session.execute(count_stmt)
+    total_count = total_count_result.scalar_one()
 
-    has_more = len(rows) > limit
-    page_items = rows[:limit]
+    # Fetch the page items with OFFSET/LIMIT
+    offset = (page - 1) * limit
+    items_stmt = (
+        select(FeedItem)
+        .join(FeedItem.source)
+        .options(joinedload(FeedItem.source))
+        .where(base_conditions)
+    )
+    if keyword_condition is not None:
+        items_stmt = items_stmt.where(keyword_condition)
 
-    next_cursor: str | None = None
-    if has_more and page_items:
-        last = page_items[-1]
-        next_cursor = _encode_cursor(last.published_at, last.id)
-
-    response = FeedPageResponse(
-        items=[_item_to_schema(item) for item in page_items],
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=limit,
+    items_stmt = (
+        items_stmt
+        .order_by(FeedItem.published_at.desc(), FeedItem.id.desc())
+        .limit(limit)
+        .offset(offset)
     )
 
-    # Cache serialised response (model_dump converts datetimes to strings)
-    await cache_set(cache_key, response.model_dump(mode="json"), ttl=FEED_CACHE_TTL)
+    result = await session.execute(items_stmt)
+    rows = result.scalars().all()
 
-    return response
+    items = [_item_to_schema(item).model_dump(mode="json") for item in rows]
+
+    # Cache the result
+    await cache_set(
+        cache_key,
+        {"items": items, "total_count": total_count},
+        ttl=FEED_CACHE_TTL,
+    )
+
+    return items, total_count

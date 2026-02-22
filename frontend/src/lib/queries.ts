@@ -1,11 +1,8 @@
 // TanStack Query queryFn 정의
-// 기준: API_Contract.md, Frontend_Spec.md 섹션 5
+// 기준: API_Contract.md v1.1 (오프셋 기반 페이지네이션)
 
 import {
-  useInfiniteQuery,
   useQuery,
-  type InfiniteData,
-  type UseInfiniteQueryOptions,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -26,48 +23,44 @@ import {
 // --- Query Keys ---
 
 export const queryKeys = {
-  feed: (tab: TabType, keyword?: string) =>
-    ['feed', tab, keyword ?? ''] as const,
-  search: (query: string) => ['search', query] as const,
+  feed: (tab: TabType, page: number, keyword?: string) =>
+    ['feed', tab, page, keyword ?? ''] as const,
+  search: (query: string, page: number) => ['search', query, page] as const,
   status: () => ['status'] as const,
   sources: () => ['sources'] as const,
 };
 
-// --- Feed 무한 스크롤 쿼리 ---
+// --- Feed 페이지네이션 쿼리 (v1.1: useInfiniteQuery -> useQuery) ---
 
-export function useFeedQuery(tab: TabType, keyword?: string) {
-  return useInfiniteQuery({
-    queryKey: queryKeys.feed(tab, keyword),
-    queryFn: ({ pageParam }) =>
+export function useFeedQuery(tab: TabType, page: number, keyword?: string) {
+  return useQuery<FeedResponse>({
+    queryKey: queryKeys.feed(tab, page, keyword),
+    queryFn: () =>
       fetchFeed({
         tab,
-        cursor: pageParam as string | undefined,
+        page,
         limit: FEED_DEFAULT_LIMIT,
         keyword,
       }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: FeedResponse) =>
-      lastPage.meta.next_cursor ?? undefined,
     staleTime: FEED_STALE_TIME,
+    placeholderData: (previousData) => previousData, // keepPreviousData equivalent in v5
   });
 }
 
-// --- 검색 무한 스크롤 쿼리 ---
+// --- 검색 페이지네이션 쿼리 (v1.1: useInfiniteQuery -> useQuery) ---
 
-export function useSearchQuery(query: string) {
-  return useInfiniteQuery({
-    queryKey: queryKeys.search(query),
-    queryFn: ({ pageParam }) =>
+export function useSearchQuery(query: string, page: number) {
+  return useQuery<FeedResponse>({
+    queryKey: queryKeys.search(query, page),
+    queryFn: () =>
       fetchSearch({
         q: query,
-        offset: pageParam as number,
+        page,
         limit: SEARCH_DEFAULT_LIMIT,
       }),
-    initialPageParam: 0 as number,
-    getNextPageParam: (lastPage: FeedResponse, allPages) =>
-      lastPage.meta.has_more ? allPages.length * SEARCH_DEFAULT_LIMIT : undefined,
     enabled: query.length > 0,
     staleTime: FEED_STALE_TIME,
+    placeholderData: (previousData) => previousData,
   });
 }
 

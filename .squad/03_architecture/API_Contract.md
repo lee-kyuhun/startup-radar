@@ -1,7 +1,7 @@
 # API Contract: Startup Radar MVP
 
-> 작성: Tech Lead 에이전트 | 날짜: 2026-02-21 | 상태: 확정
-> 기준 문서: `PRD.md`, `UI_Specs.md`, `DB_Schema.md`, `Tech_Decisions.md`
+> 작성: Tech Lead 에이전트 | 날짜: 2026-02-21 | 수정: 2026-02-22 (v1.1) | 상태: 수정 반영
+> 기준 문서: `PRD.md (v1.1)`, `UI_Specs.md`, `DB_Schema.md`, `Tech_Decisions.md`
 > Base URL: `https://api.startup-radar.com` (개발: `http://localhost:8000`)
 
 이 문서가 프론트엔드와 백엔드 간의 유일한 계약이다.
@@ -44,34 +44,42 @@
 - 퍼블릭 (인증 불필요): `/api/v1/feed/`, `/api/v1/search/`, `/api/v1/sources/`, `/api/v1/status/`
 - 사용자 전용 (v2, 현재 미구현): `/api/v1/user/`
 
-### 페이지네이션 (TD-009)
+### 페이지네이션 (TD-009, v1.1 변경)
 
-피드 목록은 커서 기반 페이지네이션을 사용한다.
+> **v1.1 변경 (2026-02-22):** PRD v1.1에서 무한 스크롤 → 페이지네이션으로 UI 방식이 변경됨에 따라, API도 커서 기반에서 오프셋 기반으로 전환한다. 페이지 번호 표시, 전체 페이지 수 계산, 이전/다음 페이지 탐색을 위해 오프셋 기반이 필수적이다.
+
+피드 목록 및 검색 결과는 오프셋 기반 페이지네이션을 사용한다.
 
 **요청 파라미터:**
-- `cursor`: 이전 응답의 `meta.next_cursor` 값. 첫 요청은 생략.
-- `limit`: 한 번에 가져올 아이템 수. 기본값 20, 최대 50.
+- `page`: 조회할 페이지 번호. 1부터 시작. 기본값 1.
+- `limit`: 한 페이지에 표시할 아이템 수. 기본값 20, 최대 50.
 
 **응답 meta:**
 ```json
 {
   "meta": {
-    "next_cursor": "MjAyNi0wMi0yMVQxMjowMDowMFo6MTIz",
-    "has_more": true,
-    "total_count": null
+    "current_page": 1,
+    "total_pages": 15,
+    "total_count": 293,
+    "limit": 20,
+    "has_prev": false,
+    "has_next": true
   }
 }
 ```
 
-- `next_cursor`: Base64 인코딩된 `published_at:id` 문자열. 다음 페이지 없으면 `null`.
-- `has_more`: 다음 페이지 존재 여부.
-- `total_count`: 피드 API에서는 `null` (커서 기반 특성상 전체 카운트 미제공). 검색 API에서는 정수.
+- `current_page`: 현재 페이지 번호 (1-indexed).
+- `total_pages`: 전체 페이지 수. `ceil(total_count / limit)`.
+- `total_count`: 필터 조건에 맞는 전체 아이템 수.
+- `limit`: 요청된 페이지당 아이템 수.
+- `has_prev`: 이전 페이지 존재 여부. `current_page > 1`.
+- `has_next`: 다음 페이지 존재 여부. `current_page < total_pages`.
 
 ### 공통 에러 코드
 
 | `error.code` | HTTP | 설명 |
 |-------------|------|------|
-| `INVALID_CURSOR` | 400 | 잘못된 커서 형식 |
+| `INVALID_PAGE` | 400 | page가 1 미만이거나 total_pages 초과 |
 | `INVALID_LIMIT` | 400 | limit이 1~50 범위 밖 |
 | `INVALID_QUERY` | 400 | 검색어가 비어있거나 너무 김 (최대 100자) |
 | `SOURCE_NOT_FOUND` | 404 | 해당 소스 없음 |
@@ -101,8 +109,8 @@
 | 파라미터 | 타입 | 필수 | 기본값 | 설명 |
 |---------|------|------|-------|------|
 | `tab` | string | 선택 | `"news"` | 탭 필터. `"news"` 또는 `"vc_blog"` |
-| `cursor` | string | 선택 | — | 페이지네이션 커서 |
-| `limit` | integer | 선택 | `20` | 반환 개수 (1~50) |
+| `page` | integer | 선택 | `1` | 페이지 번호 (1부터 시작) |
+| `limit` | integer | 선택 | `20` | 페이지당 아이템 수 (1~50) |
 | `keyword` | string | 선택 | — | 키워드 필터 (P1). 제목+요약에서 부분 일치 검색 |
 
 **`tab` 허용 값:**
@@ -116,9 +124,10 @@
 
 **요청 예시:**
 ```
-GET /api/v1/feed/?tab=news&limit=20
-GET /api/v1/feed/?tab=vc_blog&cursor=MjAyNi0wMi0yMVQxMjowMDowMFo6MTIz&limit=20
-GET /api/v1/feed/?tab=news&keyword=AI&limit=20
+GET /api/v1/feed/?tab=news
+GET /api/v1/feed/?tab=news&page=1&limit=20
+GET /api/v1/feed/?tab=vc_blog&page=3&limit=20
+GET /api/v1/feed/?tab=news&keyword=AI&page=1
 ```
 
 ### 응답
@@ -159,9 +168,12 @@ GET /api/v1/feed/?tab=news&keyword=AI&limit=20
   ],
   "error": null,
   "meta": {
-    "next_cursor": "MjAyNi0wMi0yMVQxMDozMDowMFo6MTIy",
-    "has_more": true,
-    "total_count": null
+    "current_page": 1,
+    "total_pages": 15,
+    "total_count": 293,
+    "limit": 20,
+    "has_prev": false,
+    "has_next": true
   }
 }
 ```
@@ -329,14 +341,14 @@ GET /api/v1/status/
 | 파라미터 | 타입 | 필수 | 기본값 | 설명 |
 |---------|------|------|-------|------|
 | `q` | string | 필수 | — | 검색어 (1~100자) |
-| `cursor` | string | 선택 | — | 페이지네이션 커서 |
-| `limit` | integer | 선택 | `20` | 반환 개수 (1~50) |
+| `page` | integer | 선택 | `1` | 페이지 번호 (1부터 시작) |
+| `limit` | integer | 선택 | `20` | 페이지당 아이템 수 (1~50) |
 
 **요청 예시:**
 ```
 GET /api/v1/search/?q=AI
-GET /api/v1/search/?q=시리즈A&limit=20
-GET /api/v1/search/?q=AI&cursor=MjAyNi0wMi0yMVQxMDozMDowMFo6MTIy
+GET /api/v1/search/?q=시리즈A&page=1&limit=20
+GET /api/v1/search/?q=AI&page=2
 ```
 
 ### 응답
@@ -363,9 +375,12 @@ GET /api/v1/search/?q=AI&cursor=MjAyNi0wMi0yMVQxMDozMDowMFo6MTIy
   ],
   "error": null,
   "meta": {
-    "next_cursor": null,
-    "has_more": false,
-    "total_count": 1
+    "current_page": 1,
+    "total_pages": 1,
+    "total_count": 1,
+    "limit": 20,
+    "has_prev": false,
+    "has_next": false
   }
 }
 ```
@@ -379,9 +394,12 @@ GET /api/v1/search/?q=AI&cursor=MjAyNi0wMi0yMVQxMDozMDowMFo6MTIy
   "data": [],
   "error": null,
   "meta": {
-    "next_cursor": null,
-    "has_more": false,
-    "total_count": 0
+    "current_page": 1,
+    "total_pages": 0,
+    "total_count": 0,
+    "limit": 20,
+    "has_prev": false,
+    "has_next": false
   }
 }
 ```
@@ -418,19 +436,41 @@ GET /api/v1/search/?q=AI&cursor=MjAyNi0wMi0yMVQxMDozMDowMFo6MTIy
 
 ```
 useQuery({
-  queryKey: ['feed', tab, keyword, cursor],
-  queryFn: () => GET /api/v1/feed/?tab={tab}&keyword={keyword}&cursor={cursor}
+  queryKey: ['feed', tab, keyword, page],
+  queryFn: () => GET /api/v1/feed/?tab={tab}&keyword={keyword}&page={page}&limit=20
 })
 ```
 
-### 무한 스크롤 구현
+### 페이지네이션 구현 (v1.1 변경)
 
 ```
-useInfiniteQuery({
-  queryKey: ['feed', tab],
-  queryFn: ({ pageParam }) => GET /api/v1/feed/?tab={tab}&cursor={pageParam}
-  getNextPageParam: (lastPage) => lastPage.meta.next_cursor ?? undefined
+// 페이지 상태를 URL 파라미터 또는 컴포넌트 상태로 관리
+const [page, setPage] = useState(1)
+
+const { data } = useQuery({
+  queryKey: ['feed', tab, page],
+  queryFn: () => GET /api/v1/feed/?tab={tab}&page={page}&limit=20,
+  keepPreviousData: true  // 페이지 전환 시 이전 데이터 유지하여 깜빡임 방지
 })
+
+// 탭 전환 시 1페이지로 리셋
+const handleTabChange = (newTab) => {
+  setTab(newTab)
+  setPage(1)
+}
+
+// 페이지 이동
+const handlePageChange = (newPage) => setPage(newPage)
+// data.meta.has_prev / data.meta.has_next로 버튼 활성화 제어
+// data.meta.current_page / data.meta.total_pages로 페이지 정보 표시
+```
+
+### URL 기반 페이지 상태 관리 (권장)
+
+```
+// 특정 페이지를 URL로 공유할 수 있도록 쿼리 파라미터에 page 반영
+// 예: /?tab=news&page=3
+// Next.js useSearchParams()로 page 값 읽기/쓰기
 ```
 
 ### FeedStatusBadge 폴링
@@ -463,4 +503,39 @@ UI Spec D-4는 "상대적 표시"(3분 전)으로 결정. `published_at` (ISO 86
 
 ---
 
-*Tech Lead 에이전트 작성 | 2026-02-21 | 변경 시 Frontend Lead와 Backend Lead 동시 통보 필요*
+---
+
+## 변경 이력 (Changelog)
+
+| 버전 | 날짜 | 변경 내용 | 사유 |
+|------|------|----------|------|
+| v1.0 | 2026-02-21 | 초안 작성 및 확정 | - |
+| v1.1 | 2026-02-22 | 커서 기반 → 오프셋 기반 페이지네이션 전환 | PRD v1.1: 무한 스크롤 → 페이지네이션 변경. 페이지 번호 표시, 전체 페이지 수, 이전/다음 탐색 요구 |
+
+### v1.1 변경 상세
+
+**변경 범위:** 페이지네이션 공통 규칙, GET /api/v1/feed/, GET /api/v1/search/, 프론트엔드 연동 가이드
+
+**변경 전:**
+- 커서 기반 페이지네이션 (`cursor`, `next_cursor`, `has_more`)
+- `total_count` 미제공 (피드 API)
+- `useInfiniteQuery`로 무한 스크롤 구현
+
+**변경 후:**
+- 오프셋 기반 페이지네이션 (`page`, `limit`)
+- 응답 meta에 `current_page`, `total_pages`, `total_count`, `has_prev`, `has_next` 포함
+- `useQuery` + `keepPreviousData`로 페이지 단위 조회
+- 탭 전환 시 `page=1`로 리셋
+- URL 쿼리 파라미터에 `page` 반영 (페이지 공유 가능)
+
+**영향받는 구현:**
+- Backend: `feed.py`, `search.py` 라우터 — 쿼리 파라미터 및 SQL OFFSET/LIMIT 변경
+- Backend: `schemas/common.py` — PaginationMeta 스키마 변경
+- Backend: Redis 캐시 키 패턴 — `feed:{tab}:{cursor}` → `feed:{tab}:{page}:{limit}`
+- Frontend: `queries.ts` — `useInfiniteQuery` → `useQuery` 전환
+- Frontend: `FeedList.tsx` — 무한 스크롤 제거, 페이지네이션 컴포넌트 연동
+- Frontend: `types/api.ts` — Meta 타입 정의 변경
+
+---
+
+*Tech Lead 에이전트 작성 | 2026-02-22 (v1.1) | 변경 시 Frontend Lead와 Backend Lead 동시 통보 필요*

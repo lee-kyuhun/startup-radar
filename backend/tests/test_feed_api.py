@@ -1,15 +1,15 @@
 """
-Tests for GET /api/v1/feed/
+Tests for GET /api/v1/feed/ (offset-based pagination, v1.1)
 """
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient, ASGITransport
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from datetime import datetime, timezone
 
 from app.main import app
-from app.schemas.feed import FeedItemSchema, FeedPageResponse, FeedSourceSummary
+from app.schemas.feed import FeedItemSchema, FeedSourceSummary
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -19,8 +19,8 @@ def _make_feed_item(
     title: str = "테스트 기사",
     url: str = "https://example.com/article/1",
     source_type: str = "news",
-) -> FeedItemSchema:
-    return FeedItemSchema(
+) -> dict:
+    schema = FeedItemSchema(
         id=id,
         source=FeedSourceSummary(
             id=1,
@@ -33,17 +33,17 @@ def _make_feed_item(
         summary="요약 텍스트입니다.",
         author="홍길동",
         published_at=datetime(2026, 2, 21, 12, 0, 0, tzinfo=timezone.utc),
-        crawled_at=datetime(2026, 2, 21, 12, 5, 0, tzinfo=timezone.utc),
     )
+    return schema.model_dump(mode="json")
 
 
-def _make_page_response(items=None, has_more=False, next_cursor=None) -> FeedPageResponse:
-    return FeedPageResponse(
-        items=items or [_make_feed_item()],
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=20,
-    )
+def _make_service_return(items=None, total_count=None):
+    """Return value for the mocked get_feed_page: (items, total_count)."""
+    if items is None:
+        items = [_make_feed_item()]
+    if total_count is None:
+        total_count = len(items)
+    return (items, total_count)
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -51,10 +51,8 @@ def _make_page_response(items=None, has_more=False, next_cursor=None) -> FeedPag
 @pytest.mark.asyncio
 async def test_feed_returns_envelope():
     """Response must follow the { data, error, meta } envelope."""
-    mock_page = _make_page_response()
-
     with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_page
+        mock_get.return_value = _make_service_return()
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -72,10 +70,8 @@ async def test_feed_returns_envelope():
 @pytest.mark.asyncio
 async def test_feed_default_tab_is_news():
     """Default tab parameter should be 'news'."""
-    mock_page = _make_page_response()
-
     with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_page
+        mock_get.return_value = _make_service_return()
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -89,12 +85,10 @@ async def test_feed_default_tab_is_news():
 @pytest.mark.asyncio
 async def test_feed_tab_vc_blog():
     """vc_blog tab should be accepted."""
-    mock_page = _make_page_response(
-        items=[_make_feed_item(source_type="vc_blog")]
-    )
-
     with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_page
+        mock_get.return_value = _make_service_return(
+            items=[_make_feed_item(source_type="vc_blog")]
+        )
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -102,8 +96,6 @@ async def test_feed_tab_vc_blog():
             resp = await client.get("/api/v1/feed/?tab=vc_blog")
 
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["meta"]["tab"] == "vc_blog"
 
 
 @pytest.mark.asyncio
@@ -118,34 +110,47 @@ async def test_feed_limit_max_50():
 
 
 @pytest.mark.asyncio
-async def test_feed_cursor_pagination():
-    """next_cursor should be returned when has_more is True."""
-    mock_page = _make_page_response(
-        items=[_make_feed_item(i) for i in range(20)],
-        has_more=True,
-        next_cursor="dGVzdF9jdXJzb3I=",
-    )
-
+async def test_feed_offset_pagination_meta():
+    """Meta should contain offset-based pagination fields."""
+    items = [_make_feed_item(i, url=f"https://example.com/article/{i}") for i in range(20)]
     with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_page
+        mock_get.return_value = _make_service_return(items=items, total_count=45)
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            resp = await client.get("/api/v1/feed/")
+            resp = await client.get("/api/v1/feed/?page=1&limit=20")
 
     body = resp.json()
-    assert body["data"]["has_more"] is True
-    assert body["data"]["next_cursor"] == "dGVzdF9jdXJzb3I="
+    meta = body["meta"]
+    assert meta["current_page"] == 1
+    assert meta["total_pages"] == 3  # ceil(45/20)
+    assert meta["total_count"] == 45
+    assert meta["limit"] == 20
+    assert meta["has_prev"] is False
+    assert meta["has_next"] is True
+
+
+@pytest.mark.asyncio
+async def test_feed_page_param_forwarded():
+    """page parameter should be forwarded to the service."""
+    with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = _make_service_return()
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/v1/feed/?page=3")
+
+    call_kwargs = mock_get.call_args.kwargs
+    assert call_kwargs["page"] == 3
 
 
 @pytest.mark.asyncio
 async def test_feed_keyword_filter():
     """keyword query param should be passed to the service."""
-    mock_page = _make_page_response()
-
     with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_page
+        mock_get.return_value = _make_service_return()
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -165,3 +170,18 @@ async def test_feed_invalid_tab():
         resp = await client.get("/api/v1/feed/?tab=invalid_tab")
 
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_feed_default_page_is_1():
+    """Default page parameter should be 1."""
+    with patch("app.api.v1.feed.get_feed_page", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = _make_service_return()
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/v1/feed/")
+
+    call_kwargs = mock_get.call_args.kwargs
+    assert call_kwargs["page"] == 1

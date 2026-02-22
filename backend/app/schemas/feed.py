@@ -24,10 +24,3 @@ class FeedItemSchema(BaseModel):
     summary: str | None
     author: str | None
     published_at: datetime
-
-
-class FeedPageResponse(BaseModel):
-    items: list[FeedItemSchema]
-    next_cursor: str | None = None
-    has_more: bool = False
-    limit: int = 20

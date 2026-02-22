@@ -1,15 +1,17 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useCallback } from 'react';
-import { redirect } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef } from 'react';
+import { redirect, useRouter, usePathname } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useSearchQuery } from '@/lib/queries';
 import { FeedItem } from '@/components/feed/FeedItem';
 import { FeedSkeleton } from '@/components/feed/FeedSkeleton';
 import { FeedError } from '@/components/feed/FeedError';
+import { Pagination } from '@/components/feed/Pagination';
 
 // UI Spec 4-2: 검색 결과 페이지
-// 빈 q → / 리다이렉트
+// URL: /search?q=AI&page=2 (D-7 페이지네이션)
+// 빈 q -> / 리다이렉트
 export default function SearchPage() {
   return (
     <Suspense>
@@ -27,73 +29,92 @@ function SearchPageContent() {
     redirect('/');
   }
 
-  return <SearchContent query={query} />;
+  const rawPage = searchParams.get('page');
+  const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
+  const currentPage = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
+
+  return <SearchContent query={query} page={currentPage} />;
 }
 
-function SearchContent({ query }: { query: string }) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
+function SearchContent({ query, page }: { query: string; page: number }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const prevPageRef = useRef(page);
+
   const {
     data,
     isLoading,
     isError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    isPlaceholderData,
     refetch,
-  } = useSearchQuery(query);
+  } = useSearchQuery(query, page);
 
-  const handleIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage();
-      }
+  // 페이지 전환 시 스크롤 상단 이동
+  useEffect(() => {
+    if (prevPageRef.current !== page) {
+      prevPageRef.current = page;
+      listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [page]);
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      const params = new URLSearchParams();
+      params.set('q', query);
+      if (newPage > 1) params.set('page', String(newPage));
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
+    [router, pathname, query],
   );
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(handleIntersect, { rootMargin: '200px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [handleIntersect]);
-
-  const allItems = data?.pages.flatMap((p) => p.items) ?? [];
-  const totalCount = data?.pages[0]?.meta.total_count ?? null;
+  const items = data?.items ?? [];
+  const meta = data?.meta;
+  const totalPages = meta?.total_pages ?? 0;
+  const totalCount = meta?.total_count ?? 0;
 
   return (
-    <div className="max-w-feed mx-auto px-4 sm:px-6 py-6 pb-8">
+    <div className="max-w-feed mx-auto px-4 sm:px-6 py-6 pb-8" ref={listTopRef}>
       {/* SearchHeader */}
       {!isLoading && (
         <div className="mb-4">
-          <span className="text-base font-semibold text-sr-gray-100">"{query}"</span>
-          {totalCount !== null && (
-            <span className="text-sm text-sr-gray-500 ml-2">
-              {totalCount}개 결과
-            </span>
-          )}
+          <span className="text-base font-semibold text-sr-gray-100">&ldquo;{query}&rdquo;</span>
+          <span className="text-sm text-sr-gray-500 ml-2">
+            {totalCount}개 결과
+          </span>
         </div>
       )}
 
-      {isLoading && <FeedSkeleton />}
+      {/* 로딩 */}
+      {isLoading && !data && <FeedSkeleton />}
 
+      {/* 에러 */}
       {isError && <FeedError onRetry={() => refetch()} />}
 
-      {!isLoading && !isError && allItems.length === 0 && (
+      {/* 빈 결과 */}
+      {!isLoading && !isError && items.length === 0 && !isPlaceholderData && (
         <SearchEmpty query={query} />
       )}
 
-      {!isLoading && !isError && allItems.map((item) => (
-        <FeedItem key={item.id} item={item} />
-      ))}
-
-      <div ref={sentinelRef} className="h-px" aria-hidden="true" />
-
-      {isFetchingNextPage && (
-        <div className="mt-2">
+      {/* 결과 목록 */}
+      {!isError && items.length > 0 && (
+        isPlaceholderData ? (
           <FeedSkeleton />
-        </div>
+        ) : (
+          items.map((item) => (
+            <FeedItem key={item.id} item={item} />
+          ))
+        )
+      )}
+
+      {/* 페이지네이션: 1페이지 이하/0개/에러 시 숨김 */}
+      {!isError && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          isLoading={isPlaceholderData}
+          onPageChange={handlePageChange}
+        />
       )}
     </div>
   );
@@ -115,7 +136,7 @@ function SearchEmpty({ query }: { query: string }) {
         <path d="M33 33L44 44" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
       <p className="text-sm text-sr-gray-500 mb-1">
-        <span className="text-sr-gray-300">"{query}"</span>에 대한 결과가 없습니다.
+        <span className="text-sr-gray-300">&ldquo;{query}&rdquo;</span>에 대한 결과가 없습니다.
       </p>
       <p className="text-sm text-sr-gray-500">
         다른 키워드로 검색하거나, 더 짧은 키워드를 사용해 보세요.

@@ -149,6 +149,31 @@ exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 
 ---
 
+## Railway DNS 문제 해결 문서 작성 완료 (2026-02-22)
+
+> 긴급 이슈 대응 — 상세 트러블슈팅 문서 작성
+
+### 작성한 문서
+
+`.squad/deploy/Troubleshoot_Railway_DNS.md` — 6개 섹션, Ephemeral Agent 위임 작업 4건 포함
+
+### 핵심 결론
+
+1. **즉시 해결**: Railway DATABASE_URL을 `${{Postgres.DATABASE_PUBLIC_URL}}`로 변경 (코드 변경 불필요)
+2. **근본 해결**: `main.py`에 tenacity 기반 `_wait_for_db()` 재시도 로직 추가
+3. **railway.toml**: healthcheckTimeout 60 -> 120 증가 필요
+
+### Ephemeral Agent 위임 작업
+
+| 작업 | 파일 | 상태 |
+|------|------|------|
+| A. tenacity DB 대기 로직 | `backend/app/main.py` | 미완료 |
+| B. 헬스체크 타임아웃 증가 | `backend/railway.toml` | 미완료 |
+| C. alembic.ini URL 안전화 | `backend/alembic.ini` | 미완료 (선택) |
+| D. .env.example 업데이트 | `backend/.env.example` | 미완료 |
+
+---
+
 ## 배포 문서 위치
 
 | 문서 | 경로 |
@@ -157,3 +182,4 @@ exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 | Infra Map | `.squad/deploy/Infra_Map.md` |
 | Runbook | `.squad/deploy/Runbook.md` |
 | Env Spec | `.squad/deploy/Env_Spec.md` |
+| **Troubleshoot DNS** | **`.squad/deploy/Troubleshoot_Railway_DNS.md`** |

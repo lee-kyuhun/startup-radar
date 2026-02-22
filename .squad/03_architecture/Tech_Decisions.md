@@ -1,6 +1,6 @@
 # Tech Decisions: Startup Radar MVP
 
-> 작성: Tech Lead 에이전트 | 날짜: 2026-02-21 | 상태: 확정
+> 작성: Tech Lead 에이전트 | 날짜: 2026-02-21 | 수정: 2026-02-22 (v1.1) | 상태: 확정
 > 기준 문서: `.squad/01_planning/PRD.md`, `.squad/02_design/UI_Specs.md`, `.squad/03_architecture/Open_Questions.md`
 
 모든 기술 선택에는 반드시 근거가 있어야 한다. 구두로 결정하지 않는다. 이 파일이 결정의 유일한 기록이다.
@@ -162,18 +162,45 @@
 
 ---
 
-## TD-009. 페이지네이션 — 커서 기반 (Cursor-based)
+## TD-009. 페이지네이션 — 오프셋 기반 (Offset-based) [v1.1 변경]
 
-**결정:** 피드 목록 API는 커서 기반 페이지네이션 사용.
+**결정:** 피드 목록 API는 오프셋 기반 페이지네이션 사용.
 
-**근거:**
-- Tech Lead 에이전트 누적 학습(learnings.md): "뉴스 피드처럼 무한 스크롤이 있는 경우 커서 기반 권장"
-- 오프셋 기반은 크롤링으로 새 아이템이 계속 추가될 때 페이지 스킵/중복 문제 발생
-- `published_at` + `id`를 커서로 사용: 정렬 기준과 고유성 동시 확보
+**v1.1 변경 이력 (2026-02-22):**
+> 기존 결정은 커서 기반이었으나, PRD v1.1에서 무한 스크롤 → 페이지네이션으로 UI 방식이 변경됨에 따라 오프셋 기반으로 전환한다.
 
-**커서 형식:** `published_at:id` → Base64 인코딩 → URL 안전 문자열
+**기존 결정 (v1.0, 폐기):**
+- 커서 기반 (`published_at:id` Base64 인코딩)
+- 근거: 무한 스크롤 UI에서 커서 기반이 적합, 오프셋 밀림 방지
+- 이 결정은 PRD v1.1 변경으로 더 이상 유효하지 않음
 
-**결정일:** 2026-02-21
+**현재 결정 (v1.1):**
+- 오프셋 기반 (`page` + `limit` 파라미터)
+- 응답에 `current_page`, `total_pages`, `total_count`, `has_prev`, `has_next` 포함
+
+**변경 근거:**
+- PRD v1.1 요구사항: 현재 페이지 번호 표시, 전체 페이지 수 표시, 이전/다음 페이지 탐색
+- 커서 기반은 `total_count`/`total_pages` 산출이 구조적으로 불가능하여 PRD 요구사항 충족 불가
+- 페이지 번호 기반 URL 공유(`?tab=news&page=3`)는 커서 문자열보다 사용자 친화적
+- 오프셋 밀림(새 아이템 추가 시 동일 아이템 재노출) 리스크는 존재하나, 크롤링 주기(1시간)와 사용자 피드 소비 패턴을 감안하면 실질적 영향 미미
+
+**오프셋 밀림 완화 전략:**
+- `published_at DESC, id DESC` 정렬로 안정적 정렬 보장
+- 크롤링으로 새 아이템이 추가되더라도 최신 순 정렬이므로 이전 페이지의 아이템이 다음 페이지로 밀리는 정도
+- Redis 캐시(TTL 5분)로 동일 요청에 대해 일관된 결과 제공
+
+**SQL 패턴:**
+```sql
+SELECT *, COUNT(*) OVER() AS total_count
+FROM feed_items
+WHERE source_id IN (SELECT id FROM sources WHERE source_type = :tab)
+  AND is_active = TRUE
+ORDER BY published_at DESC, id DESC
+LIMIT :limit OFFSET :offset
+```
+> `COUNT(*) OVER()` 윈도우 함수로 별도 COUNT 쿼리 없이 전체 수 산출. 성능이 문제되면 별도 COUNT 쿼리 + Redis 캐싱으로 분리.
+
+**결정일:** 2026-02-22 (v1.0 결정일: 2026-02-21)
 
 ---
 
@@ -204,4 +231,4 @@
 
 ---
 
-*Tech Lead 에이전트 작성 | 기준: PRD.md, UI_Specs.md, Open_Questions.md | 다음 갱신: 구현 중 신규 결정 발생 시*
+*Tech Lead 에이전트 작성 | 기준: PRD.md (v1.1), UI_Specs.md, Open_Questions.md | 다음 갱신: 구현 중 신규 결정 발생 시*

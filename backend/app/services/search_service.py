@@ -8,11 +8,12 @@ from sqlalchemy.orm import joinedload
 
 from app.models.feed_item import FeedItem
 from app.models.source import Source
-from app.schemas.feed import FeedItemSchema, FeedPageResponse, FeedSourceSummary
+from app.redis_client import cache_get, cache_set
+from app.schemas.feed import FeedItemSchema, FeedSourceSummary
 
 logger = logging.getLogger(__name__)
 
-MAX_SEARCH_LIMIT = 50
+SEARCH_CACHE_TTL = 60  # 1 minute (as per DB_Schema.md)
 
 
 def _item_to_schema(item: FeedItem) -> FeedItemSchema:
@@ -30,60 +31,57 @@ def _item_to_schema(item: FeedItem) -> FeedItemSchema:
         summary=item.summary,
         author=item.author,
         published_at=item.published_at,
-        crawled_at=item.crawled_at,
     )
 
 
 async def search_feed_items(
     session: AsyncSession,
     keyword: str,
-    source_type: str | None = None,
+    page: int = 1,
     limit: int = 20,
-    offset: int = 0,
-) -> FeedPageResponse:
+) -> tuple[list[dict], int]:
     """
     Search feed items by keyword using PostgreSQL ILIKE (case-insensitive).
     Searches title and summary fields.
+    Returns (items_as_dicts, total_count).
 
     Full-text search (tsvector / GIN index) is planned for a later phase.
     """
-    limit = min(limit, MAX_SEARCH_LIMIT)
+    # Build base filter conditions
+    base_conditions = and_(
+        FeedItem.is_active == True,  # noqa: E712
+        Source.is_active == True,  # noqa: E712
+        or_(
+            FeedItem.title.ilike(f"%{keyword}%"),
+            FeedItem.summary.ilike(f"%{keyword}%"),
+        ),
+    )
 
-    stmt = (
+    # Count total matching items
+    count_stmt = (
+        select(func.count())
+        .select_from(FeedItem)
+        .join(FeedItem.source)
+        .where(base_conditions)
+    )
+    total_count_result = await session.execute(count_stmt)
+    total_count = total_count_result.scalar_one()
+
+    # Fetch the page items with OFFSET/LIMIT
+    offset = (page - 1) * limit
+    items_stmt = (
         select(FeedItem)
         .join(FeedItem.source)
         .options(joinedload(FeedItem.source))
-        .where(
-            and_(
-                FeedItem.is_active == True,
-                Source.is_active == True,
-                or_(
-                    FeedItem.title.ilike(f"%{keyword}%"),
-                    FeedItem.summary.ilike(f"%{keyword}%"),
-                ),
-            )
-        )
-    )
-
-    if source_type:
-        stmt = stmt.where(Source.source_type == source_type)
-
-    stmt = (
-        stmt
-        .order_by(FeedItem.published_at.desc())
-        .limit(limit + 1)
+        .where(base_conditions)
+        .order_by(FeedItem.published_at.desc(), FeedItem.id.desc())
+        .limit(limit)
         .offset(offset)
     )
 
-    result = await session.execute(stmt)
+    result = await session.execute(items_stmt)
     rows = result.scalars().all()
 
-    has_more = len(rows) > limit
-    page_items = rows[:limit]
+    items = [_item_to_schema(item).model_dump(mode="json") for item in rows]
 
-    return FeedPageResponse(
-        items=[_item_to_schema(item) for item in page_items],
-        next_cursor=None,  # Search uses offset, not cursor
-        has_more=has_more,
-        limit=limit,
-    )
+    return items, total_count

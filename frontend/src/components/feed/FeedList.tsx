@@ -1,80 +1,93 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TabType } from '@/types/api';
 import { useFeedQuery } from '@/lib/queries';
 import { FeedItem } from './FeedItem';
 import { FeedSkeleton } from './FeedSkeleton';
 import { FeedEmpty } from './FeedEmpty';
 import { FeedError } from './FeedError';
+import { Pagination } from './Pagination';
 
 interface FeedListProps {
   tab: TabType;
+  page: number;
   keyword?: string;
+  onPageChange: (page: number) => void;
 }
 
-// UI Spec: 무한 스크롤 피드 컨테이너
-// IntersectionObserver로 하단 sentinel 감지 → fetchNextPage
-export function FeedList({ tab, keyword }: FeedListProps) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
+// UI Spec 3-2: 페이지네이션 피드 컨테이너 (D-7)
+// useQuery + keepPreviousData, 무한 스크롤 제거
+export function FeedList({ tab, page, keyword, onPageChange }: FeedListProps) {
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const prevPageRef = useRef(page);
+
   const {
     data,
     isLoading,
     isError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    isPlaceholderData,
     refetch,
-  } = useFeedQuery(tab, keyword);
+  } = useFeedQuery(tab, page, keyword);
 
-  const handleIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
-  );
-
+  // 페이지 전환 시 스크롤 상단 이동
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (prevPageRef.current !== page) {
+      prevPageRef.current = page;
+      listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [page]);
 
-    const observer = new IntersectionObserver(handleIntersect, {
-      rootMargin: '200px', // 하단 200px 전에 미리 로드
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [handleIntersect]);
+  const items = data?.items ?? [];
+  const meta = data?.meta;
+  const totalPages = meta?.total_pages ?? 0;
 
-  if (isLoading) return <FeedSkeleton />;
-  if (isError) return <FeedError onRetry={() => refetch()} />;
+  // 로딩 중 (첫 로드, placeholder 없음)
+  if (isLoading && !data) {
+    return (
+      <div ref={listTopRef}>
+        <FeedSkeleton />
+      </div>
+    );
+  }
 
-  const allItems = data?.pages.flatMap((page) => page.items) ?? [];
+  // 에러
+  if (isError) {
+    return (
+      <div ref={listTopRef}>
+        <FeedError onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
-  if (allItems.length === 0) return <FeedEmpty tab={tab} />;
+  // 빈 상태
+  if (items.length === 0 && !isPlaceholderData) {
+    return (
+      <div ref={listTopRef}>
+        <FeedEmpty tab={tab} />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {allItems.map((item) => (
-        <FeedItem key={item.id} item={item} />
-      ))}
-
-      {/* 무한 스크롤 sentinel */}
-      <div ref={sentinelRef} className="h-px" aria-hidden="true" />
-
-      {/* 추가 로딩 스켈레톤 */}
-      {isFetchingNextPage && (
-        <div className="mt-2">
-          <FeedSkeleton />
-        </div>
+    <div ref={listTopRef}>
+      {/* 페이지 전환 중 스켈레톤 (placeholder data가 표시되는 동안) */}
+      {isPlaceholderData ? (
+        <FeedSkeleton />
+      ) : (
+        items.map((item) => (
+          <FeedItem key={item.id} item={item} />
+        ))
       )}
 
-      {/* 더 이상 피드 없음 */}
-      {!hasNextPage && allItems.length > 0 && (
-        <p className="text-center text-xs text-sr-gray-500 py-8">
-          모든 피드를 불러왔습니다.
-        </p>
+      {/* 페이지네이션: 20개 이하(1페이지)/0개/에러 시 숨김 */}
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          isLoading={isPlaceholderData}
+          onPageChange={onPageChange}
+        />
       )}
     </div>
   );

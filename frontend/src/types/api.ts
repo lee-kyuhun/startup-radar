@@ -13,9 +13,12 @@ export interface ApiError {
 }
 
 export interface PaginationMeta {
-  next_cursor: string | null;
-  has_more: boolean;
-  total_count: number | null;
+  current_page: number;
+  total_pages: number;
+  total_count: number;
+  limit: number;
+  has_prev: boolean;
+  has_next: boolean;
 }
 
 export type SourceType = 'news' | 'vc_blog';

@@ -13,9 +13,12 @@ class ErrorDetail(BaseModel):
 
 
 class PaginationMeta(BaseModel):
-    next_cursor: str | None = None
-    has_more: bool = False
+    current_page: int = 1
+    total_pages: int = 0
+    total_count: int = 0
     limit: int = 20
+    has_prev: bool = False
+    has_next: bool = False
 
 
 class ResponseEnvelope(BaseModel, Generic[T]):

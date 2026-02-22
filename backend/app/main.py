@@ -11,10 +11,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from tenacity import retry, retry_if_exception_type, stop_after_delay, wait_exponential
 
 from app.config import settings
 from app.crawlers.manager import register_all_crawl_jobs
-from app.database import close_db
+from app.database import close_db, engine
 from app.redis_client import close_redis
 
 logger = logging.getLogger(__name__)
@@ -31,10 +33,33 @@ if settings.SENTRY_DSN:
 scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
 
 
+# ── DB readiness check ────────────────────────────────────────────────────────
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_delay(60),
+    retry=retry_if_exception_type(Exception),
+    before_sleep=lambda retry_state: logger.info(
+        "[startup] Waiting for DB... attempt %d", retry_state.attempt_number
+    ),
+)
+async def _wait_for_db() -> None:
+    """Verify DB connectivity. Retries with exponential backoff up to 60s."""
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+    logger.info("[startup] DB connection verified")
+
+
 # ── Production init (migration + seed) ────────────────────────────────────────
 async def _run_production_init() -> None:
     """Run alembic migrations + seed data only when APP_ENV == 'production'."""
     if settings.APP_ENV != "production":
+        return
+
+    # 0) Wait for DB to be reachable
+    try:
+        await _wait_for_db()
+    except Exception as exc:
+        logger.error("[startup] DB not reachable after 60s: %s", exc)
         return
 
     # 1) Alembic migration via subprocess (separate process = no event loop conflict)

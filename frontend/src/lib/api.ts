@@ -23,7 +23,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
 
-  if (!res.ok && res.status !== 200) {
+  if (!res.ok) {
     throw new ApiClientError('HTTP_ERROR', `HTTP ${res.status}: ${res.statusText}`);
   }
 
@@ -57,22 +57,15 @@ export interface FeedResponse {
   meta: PaginationMeta;
 }
 
-interface FeedPageData {
-  items: FeedItem[];
-  next_cursor: string | null;
-  has_more: boolean;
-  limit: number;
-}
-
 export async function fetchFeed(params: {
   tab?: string;
-  cursor?: string;
+  page?: number;
   limit?: number;
   keyword?: string;
 }): Promise<FeedResponse> {
   const qs = buildSearchParams({
     tab: params.tab ?? 'news',
-    cursor: params.cursor,
+    page: params.page ?? 1,
     limit: params.limit ?? 20,
     keyword: params.keyword,
   });
@@ -80,39 +73,73 @@ export async function fetchFeed(params: {
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  const envelope: Envelope<FeedPageData> = await res.json();
+
+  if (!res.ok) {
+    // Handle HTTP errors (400, 422, 500, etc.)
+    try {
+      const errorBody = await res.json();
+      if (errorBody?.error?.code) {
+        throw new ApiClientError(errorBody.error.code, errorBody.error.message);
+      }
+    } catch (e) {
+      if (e instanceof ApiClientError) throw e;
+    }
+    throw new ApiClientError('HTTP_ERROR', `HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const envelope: Envelope<FeedItem[]> = await res.json();
   if (envelope.error) throw new ApiClientError(envelope.error.code, envelope.error.message);
   return {
-    items: envelope.data?.items ?? [],
-    meta: {
-      next_cursor: envelope.data?.next_cursor ?? null,
-      has_more: envelope.data?.has_more ?? false,
-      total_count: null,
+    items: envelope.data ?? [],
+    meta: envelope.meta ?? {
+      current_page: 1,
+      total_pages: 0,
+      total_count: 0,
+      limit: 20,
+      has_prev: false,
+      has_next: false,
     },
   };
 }
 
 export async function fetchSearch(params: {
   q: string;
-  offset?: number;
+  page?: number;
   limit?: number;
 }): Promise<FeedResponse> {
   const qs = buildSearchParams({
     q: params.q,
-    offset: params.offset ?? 0,
+    page: params.page ?? 1,
     limit: params.limit ?? 20,
   });
   const res = await fetch(`${BASE_URL}/api/v1/search/${qs}`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  const envelope: Envelope<FeedPageData> = await res.json();
+
+  if (!res.ok) {
+    // Handle HTTP errors (400, 422, 500, etc.)
+    try {
+      const errorBody = await res.json();
+      if (errorBody?.error?.code) {
+        throw new ApiClientError(errorBody.error.code, errorBody.error.message);
+      }
+    } catch (e) {
+      if (e instanceof ApiClientError) throw e;
+    }
+    throw new ApiClientError('HTTP_ERROR', `HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const envelope: Envelope<FeedItem[]> = await res.json();
   if (envelope.error) throw new ApiClientError(envelope.error.code, envelope.error.message);
   return {
-    items: envelope.data?.items ?? [],
-    meta: {
-      next_cursor: null,
-      has_more: envelope.data?.has_more ?? false,
-      total_count: null,
+    items: envelope.data ?? [],
+    meta: envelope.meta ?? {
+      current_page: 1,
+      total_pages: 0,
+      total_count: 0,
+      limit: 20,
+      has_prev: false,
+      has_next: false,
     },
   };
 }
